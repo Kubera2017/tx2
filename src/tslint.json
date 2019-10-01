@@ -1,0 +1,30 @@
+{
+    "defaultSeverity": "error",
+    "extends": [
+        "tslint:recommended"
+    ],
+    "jsRules": {},
+    "rules": {
+        "no-console": false,
+        "max-line-length": false,
+        "ordered-imports": false,
+        "object-literal-sort-keys": false,
+        "no-angle-bracket-type-assertion": false,
+        "eofline": false,
+        "object-literal-shorthand": false,
+        "array-type": false,
+        "interface-name": false,
+        "prefer-for-of": false,
+        "curly": false,
+        "variable-name": false,
+        "one-variable-per-declaration": false,
+        "arrow-parens": false,
+        "forin": false
+    },
+    "rulesDirectory": [],
+    "linterOptions": {
+        "exclude": [
+            "node_modules/**"
+        ]
+    }
+}
