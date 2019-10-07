@@ -10,6 +10,8 @@ password        = "123"
 
 graphDB_Driver  = GraphDatabase.driver(uri, auth=(userName, password))
 
+threads         = 5
+
 def get_dup_groups(tx):
     return tx.run(
     "MATCH (n:BankAccount) " + 
@@ -89,7 +91,7 @@ with graphDB_Driver.session() as session:
         temp_label = "POTENTIAL_DUP_ACC_GROUP_" + str(i)
         dupPairs = session.write_transaction(mark_and_get_dup_pairs, group, temp_label).data()
 
-        pool = ThreadPoolExecutor(5)
+        pool = ThreadPoolExecutor(threads)
         futures = []
         for j, pair in enumerate(dupPairs):
             futures.append(pool.submit(_calc_and_mark, pair))

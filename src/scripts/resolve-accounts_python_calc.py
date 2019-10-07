@@ -51,6 +51,9 @@ def detect_similarity_communities(tx, i, temp_label):
     "CALL algo.louvain.stream($temp_label, 'SIMILAR_TO', {}) " + 
     "YIELD nodeId, community " + 
     "WITH algo.getNodeById(nodeId) AS member, community " + 
+    "WITH community, collect(member) AS members " +
+    "WHERE size(members) > 1 " +
+    "UNWIND members AS member " +
     'MERGE (c:BankAccountCommunity {id: toString($i) + "_" + toString(community)}) ' +
     "MERGE (c)-[:COMMUNITY_MEMBER]->(member) ", 
     temp_label=temp_label, i=i
@@ -75,15 +78,24 @@ with graphDB_Driver.session() as session:
 
     for i, dup in enumerate(dups):
         group = dup.get("dups")
-        print("Group", i, "Members:", len(group))
+        print("Group", i, "/", len(dups), "Members:", len(group))
         temp_label = "POTENTIAL_DUP_ACC_GROUP_" + str(i)
         dupPairs = session.write_transaction(mark_and_get_dup_pairs, group, temp_label).data()
+        print("Group", i, "/", len(dups), "Resolving similarities. Pairs:", len(dupPairs))
+        similar_nodes_founded = False
         for j, pair in enumerate(dupPairs):
+            print("Group", i, "/", len(dups), "Processing", j + 1, "/", len(dupPairs) )
             A = pair.get("A")
             B = pair.get("B")
-            if calculate_score(A, B) > 0.7:
+            if calculate_score(A, B) > 0.85:
                 session.write_transaction(mark_similar_nodes, A.get("id"), B.get("id"))
-        session.write_transaction(detect_similarity_communities, i, temp_label)
-        session.write_transaction(clean_up, group, temp_label)
+                similar_nodes_founded = True
+        if similar_nodes_founded == True:
+            print("Group", i, "/", len(dups), "Detect communuties")
+            session.write_transaction(detect_similarity_communities, i, temp_label)
 
+        session.write_transaction(clean_up, group, temp_label)
+        print("Group", i, "/", len(dups), "Done")
+
+    session.close()
 graphDB_Driver.close()
