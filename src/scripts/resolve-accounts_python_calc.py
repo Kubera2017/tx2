@@ -46,7 +46,7 @@ def mark_similar_nodes(tx, id1, id2):
     id1=id1, id2=id2
     )
 
-def detect_similarity_communities(tx, i, temp_label):
+def detect_and_mark_similarity_communities(tx, temp_label, index):
     return tx.run(
     "CALL algo.louvain.stream($temp_label, 'SIMILAR_TO', {}) " + 
     "YIELD nodeId, community " + 
@@ -56,7 +56,7 @@ def detect_similarity_communities(tx, i, temp_label):
     "UNWIND members AS member " +
     'MERGE (c:BankAccountCommunity {id: toString($i) + "_" + toString(community)}) ' +
     "MERGE (c)-[:COMMUNITY_MEMBER]->(member) ", 
-    temp_label=temp_label, i=i
+    temp_label=temp_label, i=index
     )
 
 def clean_up(tx, list, temp_label):
@@ -92,7 +92,7 @@ with graphDB_Driver.session() as session:
                 similar_nodes_founded = True
         if similar_nodes_founded == True:
             print("Group", i, "/", len(dups), "Detect communuties")
-            session.write_transaction(detect_similarity_communities, i, temp_label)
+            session.write_transaction(detect_and_mark_similarity_communities, temp_label, i)
 
         session.write_transaction(clean_up, group, temp_label)
         print("Group", i, "/", len(dups), "Done")

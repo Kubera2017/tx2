@@ -7,7 +7,6 @@
 
 from neo4j import GraphDatabase
 import textdistance
-from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED, as_completed
 
 uri             = "bolt://localhost:7687"
 
@@ -17,7 +16,7 @@ password        = "123"
 
 graphDB_Driver  = GraphDatabase.driver(uri, auth=(userName, password))
 
-def get_group_by_staring_with(tx, string):
+def get_group_by_starts_with(tx, string):
     return tx.run(
     "MATCH (n:Entity) " + 
     "WHERE n.name STARTS WITH $string " + 
@@ -26,7 +25,7 @@ def get_group_by_staring_with(tx, string):
     string=string
     )
 
-def mark_and_get_dup_pairs(tx, list, temp_label):
+def mark_and_get_dup_pairs(tx, node_list, temp_label):
     return tx.run(
     "MATCH (n) WHERE id(n) IN $list " + 
     "WITH collect(n) AS list " + 
@@ -37,7 +36,7 @@ def mark_and_get_dup_pairs(tx, list, temp_label):
     "WITH n1, n2 " +
     "WHERE id(n1) > id(n2) " +
     "RETURN {id: id(n1), name: n1.name } AS A, {id: id(n2), name: n2.name } AS B", 
-    list=list, temp_label=temp_label
+    list=node_list, temp_label=temp_label
     )
 
 def calculate_score(A, B):
@@ -47,15 +46,15 @@ def calculate_score(A, B):
     return score
 
 def mark_similar_nodes(tx, id1, id2):
-    return tx.run(
+    return tx.run (
     "MATCH (n1) WHERE id(n1) = $id1 " + 
     "MATCH (n2) WHERE id(n2) = $id2 " + 
     "MERGE (n1)-[:SIMILAR_TO]-(n2) ", 
     id1=id1, id2=id2
     )
 
-def detect_similarity_communities(tx, string, temp_label):
-    return tx.run(
+def detect_and_mark_similarity_communities(tx, temp_label, start_string):
+    return tx.run (
     "CALL algo.louvain.stream($temp_label, 'SIMILAR_TO', {}) " + 
     "YIELD nodeId, community " + 
     "WITH algo.getNodeById(nodeId) AS member, community " + 
@@ -64,23 +63,24 @@ def detect_similarity_communities(tx, string, temp_label):
     "UNWIND members AS member " +
     'MERGE (c:EntityCommunity {id: $string + "_" + toString(community)}) ' +
     "MERGE (c)-[:COMMUNITY_MEMBER]->(member) ", 
-    temp_label=temp_label, string=string
+    temp_label=temp_label, string=start_string
     )
 
-def clean_up(tx, list, temp_label):
-    return tx.run(
+def clean_up(tx, node_list, temp_label):
+    return tx.run (
     "MATCH (n) WHERE id(n) IN $list " + 
     "WITH collect(n) AS list " + 
     "CALL apoc.create.removeLabels(list, [$temp_label]) YIELD node " + 
     "UNWIND list AS n " +
     "MATCH (n)-[r:SIMILAR_TO]->() " +
     "DELETE r", 
-    list=list, temp_label=temp_label
+    list=node_list, temp_label=temp_label
     )
 
-def find_similar_entities(string):
+def find_similar_entities(start_string):
+    string = start_string
     with graphDB_Driver.session() as session:
-        result = session.read_transaction(get_group_by_staring_with, string).data()
+        result = session.read_transaction(get_group_by_starts_with, string).data()
         if len(result) > 0:
             ids = result[0].get("list")
             if (len(ids) > 1):
@@ -98,7 +98,7 @@ def find_similar_entities(string):
                         similar_nodes_founded = True
                 if similar_nodes_founded == True:
                     print("Starts with", string, "Detect communuties")
-                    session.write_transaction(detect_similarity_communities, string, temp_label)
+                    session.write_transaction(detect_and_mark_similarity_communities, temp_label, string)
 
                 session.write_transaction(clean_up, ids, temp_label)
                 print("Starts with", string, "Done")
